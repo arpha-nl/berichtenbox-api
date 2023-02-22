@@ -1,0 +1,387 @@
+openapi: 3.0.3
+info:
+  title: Berichtenbox API
+  description: This API allows sending of Berichtenbox messages to the central system of the Dutch Governement managed by Logius. It also provides an operation to check the status of previously sent messages.
+  version: "1.0"
+  contact:
+    name: Berichtenbox API 
+    url: https://www.berichtenbox.dev/
+    email: support@arpha.nl
+    
+servers:
+    - url: 'https://services.arpha.nl/demo'
+      description: Berichtenbox Demo API
+security:
+  - apiKeyAuth: []
+
+tags:
+  - name: Send berichtenbox messages
+  - name: Check message status
+
+paths:
+  /api/berichtenbox/v1/berichten:
+    post:
+      tags:
+        - Send berichtenbox messages
+      description: send 1 to maximum 10 Berichtenbox messages with or without attachments to the central Berichtenbox system
+      operationId: postMessages
+      parameters: 
+        - in: header
+          name: X-Message-ID
+          description: Unique message identifier in UUID format, see RFC-4122 https://tools.ietf.org/html/rfc4122 
+          required: true
+          example: 'f81b107d-7a91-4a5f-a295-61c7535e55e8'
+          schema:
+            $ref: '#/components/schemas/UUID'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BerichtenboxBerichten'
+        required: true
+      responses:
+        "201":
+          $ref: '#/components/responses/MessageAccepted'
+        "400":
+          $ref: '#/components/responses/400BadRequest'
+        "401":
+          $ref: '#/components/responses/401NotAuthorized'
+        "409":
+          $ref: '#/components/responses/409Conflict'
+        "500":
+          $ref: '#/components/responses/500InternalServerError'
+
+  /api/berichtenbox/v1/status/{statusID}:
+    get:
+      tags:
+        - Check message status
+      description: get the status of previously sent messages
+      operationId: getMessageStatus
+      parameters:
+        - in: path
+          name: statusID
+          schema:
+            $ref: '#/components/schemas/UUID'
+          description: statusID that was returned by the API after submitting an array of Berichtenbox messages
+          required: true
+      responses:
+        "200":
+          $ref: '#/components/responses/StatusResponse'
+        "400":
+          $ref: '#/components/responses/400BadRequest'
+        "401":
+          $ref: '#/components/responses/401NotAuthorized'
+        "404":
+          $ref: '#/components/responses/404NotFound'
+        "500":
+          $ref: '#/components/responses/500InternalServerError'
+
+components:
+  schemas:  
+    UUID: 
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      minLength: 36
+      maxLength: 36
+      description: An UUID specified by RFC4122
+      example: "8c33fde4-cd2f-45ef-b2ba-24a4a46ba92a"
+    
+    OIN:
+      type: string
+      maxLength: 20
+      minLength: 20
+      pattern: "^[0-9]{20}$"
+      description: OIN (from the formal sender of this letter, for example a municipality)
+      example: "00000003564624920000"
+      
+    BerichtenboxBerichten:
+      type: object
+      required:
+        - BerichtLeverancierID
+        - Berichten
+      properties:
+        BerichtLeverancierID:
+            $ref: '#/components/schemas/OIN'      
+        Berichten:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Bericht'
+    
+    Bericht:
+      type: object
+      required:
+        - BerichtID
+        - BerichtType
+        - Onderwerp
+        - Berichttekst
+        - GebruikerID
+      properties:
+        BerichtID:
+          $ref: '#/components/schemas/UUID'
+        BerichtType:
+          $ref: '#/components/schemas/BerichtType'
+        PublicatieDatum:
+          type: string
+          format: date-time
+          example: '2022-07-21T17:32:28Z'
+        Onderwerp:
+          type: string
+          maxLength: 50
+          example: "Onderwerp van dit bericht"
+        Berichttekst:
+          type: string
+          maxLength: 4000
+          example: "Hallo,\r\n\r\nDit is een nieuw bericht, verzonden via de Berichtenbox API.\r\n\r\nGroet,\r\nArpha\r\nhttps://www.arpha.nl"
+        Referentie:
+          type: string
+          maxLength: 25
+          example: "BB API Demo"
+        GebruikerID:
+          type: string
+          pattern: "^[0-9]{9}$"
+          example: "000000012"
+        Bijlagen:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/Bijlage'
+    
+    BerichtType:
+      type: string
+      maxLength: 8
+      example: "APIDEMO"
+    
+    Bijlage:
+      type: object
+      required:
+        - Inhoud
+        - Omschrijving
+      properties:
+        Inhoud:
+          type: string
+          example: "ZGl0aXNlZW5QREZiZXN0YW5k"
+          description: base64 encoded PDF, total file size of binary PDFs 500kB
+        Omschrijving:
+          type: string
+          maxLength: 128
+          example: "Bestandsnaam"
+        Volgorde:
+          type: string
+          maxLength: 1
+          example: "1"
+          description: controls the order of how attachments are shown. Only necessary when sending 2 attachments. "2" will show the attachment first/most left in the Berichtenbox system when 2 attachments are sent.
+          
+    Succes:
+      required:
+        - statusID
+        - statusURI
+      type: object
+      properties:
+        statusID:
+          $ref: '#/components/schemas/UUID'
+        statusURI:
+          type: string
+          example: "https://services.arpha.nl/demo/api/berichtenbox/v1/status/8c33fde4-cd2f-45ef-b2ba-24a4a46ba92a"
+          
+    Status:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/UUID'
+        created:
+          type: string
+          format: date-time
+          example: "2022-08-14T06:39:07+00:00"
+        status:
+          type: string
+          enum:
+            - RECEIVED
+            - IN_PROGRESS
+            - DELIVERED
+            - FAILED
+            - REPORT
+        context:
+          type: object
+          description: Context object is only given from status IN_PROGRESS and further, it is not given for status RECEIVED
+          required:
+            - Aangeleverd
+          properties:
+            Aangeleverd:
+              $ref: '#/components/schemas/Aangeleverd'
+            Verwerkt:
+              $ref: '#/components/schemas/Verwerkt'
+    
+    Aangeleverd:
+      type: object
+      required:
+        - TotaalAantalAangeleverdeBerichten
+        - Berichten
+      properties:
+        BatchID:
+          $ref: '#/components/schemas/UUID'          
+        AanmaakDatum:
+          type: string
+          format: date-time
+          example: "2022-08-14T10:07:10Z"
+        BerichtLeverancierCode:
+            $ref: '#/components/schemas/OIN'
+        TotaalAantalAangeleverdeBerichten:
+          type: integer
+        Berichten:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/BerichtenAangeleverd'
+
+    Verwerkt:
+      type: object
+      properties:
+        BerichtLeverancierCode:
+          $ref: '#/components/schemas/OIN'
+        BatchID:
+          $ref: '#/components/schemas/UUID'  
+        TotaalAantalOntvangenBerichten:
+          type: string
+          example: "1"
+        AantalBerichtenSuccesvolVerwerkt:
+          type: string
+          example: "1"        
+        AantalBerichtenGeenActieveBoxOfGeabonneertOpLeverancier:
+          type: string
+          example: "1"
+        AantalBerichtenMetTechnischProbleem:
+          type: string
+          example: "1"
+        AantalBerichtenBerichtTypeNietCorrect:
+          type: string
+          example: "1"
+        AantalBerichtenPublicatieDatumNietCorrect:
+          type: string
+          example: "1"          
+        AantalBerichtenAanmaakDatumNietCorrect:
+          type: string
+          example: "1"
+        DatumOntvangen:
+          type: string
+          format: date-time
+          example: "2022-08-14T10:07:15.001Z"
+        DatumVerwerkt:
+          type: string
+          format: date-time
+          example: "2022-08-14T10:07:16.170Z"
+        Berichten:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/BerichtenVerwerkt'
+          
+    BerichtenAangeleverd:
+      type: object
+      required:
+        - BerichtID
+      properties:
+        BerichtID:
+          $ref: '#/components/schemas/UUID'
+          
+    BerichtenVerwerkt:
+      type: object
+      required:
+        - BerichtID
+      properties:
+        BerichtID:
+          $ref: '#/components/schemas/UUID'
+        BerichtType:
+          $ref: '#/components/schemas/BerichtType'
+        VerwerkingsCode:
+          $ref: '#/components/schemas/VerwerkingsCode'
+        Stadium:
+          $ref: '#/components/schemas/Stadium'          
+          
+    VerwerkingsCode:
+      type: string
+      enum: 
+        - Verwerkt
+        - TechnischProbleem
+        - NietActiefOfGeabonneerd
+        - BerichtTypeNietOndersteund
+        - AanmaakDatumLigtTeVerInHetVerleden
+        - PublicatieDatumLigtTeVerInDeToekomst
+        - BerichtBestaatAl
+        - BijlageTeGroot
+        - OinInCPAKomtNietOvereenMetOinInBericht
+        - XmlValidatieTegenXsdValtNegatiefUit
+    
+    Stadium:
+      type: string
+      enum:
+        - NA
+        - ValidatieBerichtType
+        - ValidatieGebruiker
+        - StoreMessage
+          
+    Error:
+      required:
+        - error
+      type: object
+      properties:
+        error:
+          type: string
+          example: "more information about the error"
+        statusID:
+          $ref: '#/components/schemas/UUID'
+        statusURI:
+          type: string
+          example: "https://services.arpha.nl/demo/api/berichtenbox/v1/status/8c33fde4-cd2f-45ef-b2ba-24a4a46ba92a"
+          
+  responses:
+    StatusResponse:
+      description: Status request processed succesfully
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+    MessageAccepted:
+      description: Berichtenbox messages accepted for processing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Succes'
+    400BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    401NotAuthorized:
+      description: Not Authorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    404NotFound:
+      description: StatusID not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    409Conflict:
+      description: Conflict with previously sent message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    500InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      name: X-API-Key
+      in: header

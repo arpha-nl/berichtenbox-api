@@ -9,7 +9,7 @@ info:
     email: support@arpha.nl
     
 servers:
-    - url: 'https://services.arpha.nl/demo'
+    - url: 'https://services.demo.arpha.nl'
       description: Berichtenbox Demo API
 security:
   - apiKeyAuth: []
